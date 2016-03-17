@@ -1,2 +1,2 @@
 # Powerterm
-powerterm scripts for input to telepath
+I wrote these scripts to automatically input data from an excel spreadsheet into telepath.
