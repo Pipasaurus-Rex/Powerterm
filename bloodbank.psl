@@ -1,0 +1,149 @@
+#open excel file in ericom folder programfiles
+#EXCEL FILE NEEDS TO BE OPEN!!!
+conv = [dde initiate EXCEL bloodbankdata.xls] 
+# check connection
+while {[dde request $conv "R1C1"] == ""} {
+conv = [dde initiate EXCEL bloodbankdata.xls] 
+message {excel spreadsheet not connected, make sure it is open and named bloodbankdata.xls, also make sure row 1 cell 1 is not empty}}
+
+#need to choose starting locations
+start = [input-line "Which row to start from?"]
+end = [input-line "Which line to end on?"]
+# initiating list of broken rows
+broked = [list {}]
+
+# for loop and screen check
+for {i = $start} {$i <= $end} {incr i} {
+# checking right screen
+	if {[string trim [screen 2 1 2 32]] != "Blood Transfusion request entry"} {message "Please make sure you are at the right entry screen, 
+		menu 1 then 1, from the front page, get onto the right screen before closing this box"}
+	# sending PID, need to convert to string and trim any spaces or won't go in
+	send [string trim [dde request $conv "R$i\C1"]]
+	send <enter>
+	send [string trim [dde request $conv "R$i\C1"]]
+	send <enter>
+	wait 1 seconds
+	# Check for recognition of PID
+	if {[string trim [screen 3 40 3 47]] == "Confirm"} {
+	# Sending first 2 letters of surname
+		send [string range [dde request $conv "R$i\C3"] 0 1]
+		send <enter>
+		wait 1 seconds
+		# Check if accepted
+		if {[string trim [screen 24 1 24 48]] == "Patient exists in Heartlands database. Press ESC"} {
+			send <escape>
+			send b
+			send <enter>
+		} elseif {[string trim [screen 24 1 24 26]] == "No match - Name on file is"} {
+			broked = [linsert $broked 0 row $i surnames dont match name on file]
+			send <escape>
+			send <^>
+			send <enter>
+			wait 1 seconds
+			continue
+		} else {
+			broked = [linsert $broked 0 row $i two letter surname insert wrong]
+			send <escape>
+			send <^>
+			send <enter>
+			wait 1 seconds
+			continue
+		}
+	} else {
+		#this path is entering details for unrecognised patients
+		# send nhs number
+		send [string trim [dde request $conv "R$i\C2"]]
+		send <enter>
+		# Check if accepted
+		if {[string trim [screen 24 1 24 8]] != ""} {
+			broked = [linsert $broked 0 row $i nhs number entry fail]
+			send <escape>
+			send <^>
+			send <enter>
+			wait 1 seconds
+			continue }
+		# sending surname
+		send [string trim [dde request $conv "R$i\C3"]]
+		send <enter>
+		# sending forename
+		send [string trim [dde request $conv "R$i\C4"]]
+		send <enter>
+		# sending dob
+		send [string trim [dde request $conv "R$i\C5"]]
+		send <enter>
+		wait 1 seconds
+		# checking DOB entry
+		if {[string trim [screen 24 1 24 8]] != ""} {
+			broked = [linsert $broked 0 row $i DoB fail]
+			send <escape>
+			send <^>
+			send <enter>
+			wait 1 seconds
+			continue}
+		# sending sex
+		wait 1 seconds
+		send [string trim [dde request $conv "R$i\C6"]]
+		send <enter>	
+		wait 1 seconds
+		#patient search starts here
+		a = 0
+		while {$a!="done"} {
+			wait 1 seconds
+			if {[string trim [screen 2 1 2 22]] == "Patient search screen"} {
+				choice = [input-line "Choose patient"]
+				send $choice
+				send <enter>
+				wait 1 seconds
+				#option to merge
+				if {[string trim [screen 23 1 23 5]]=="Merge"} {
+					choice = [input-line "Merge PIDs? Y/N/Queue"]
+					send $choice
+					send <enter>
+					}
+				break
+			} elseif {[string trim [screen 24 1 24 33]]=="No patient found, press RETURN to"} {
+				send <enter>
+				break
+			} elseif {[string trim [screen 24 1 24 17]]=="No patients found"} {
+				send y
+			} elseif {a > 20} {
+				message "Something broke here, either navigate to location entry manually and enter done or navigate to entry start and enter break to fail this sample and continue from next"
+				a = [input-line "Done or break?"] 
+				# NOTE can't continue for loop inside while loop
+				if {a=="break"} {
+				broked = [linsert $broked 0 row $i failure at patient search]
+				break}				
+			} else {incr a}
+		}
+		if {$a == "break"} {continue}
+	}
+	# Paths join here on location entry
+	wait 1 seconds
+	# Entering Location Code
+	send [string trim [dde request $conv "R$i\C8"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i location entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# Entering consultant code
+	send [string trim [dde request $conv "R$i\C7"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i consultant entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+}
+message $broked

@@ -1,0 +1,347 @@
+#open excel file in ericom folder programfiles
+#EXCEL FILE NEEDS TO BE OPEN!!!
+conv = [dde initiate EXCEL data_input.xls] 
+# check connection
+while {[dde request $conv "R1C1"] == ""} {
+conv = [dde initiate EXCEL data_input.xls] 
+message {excel spreadsheet not connected, make sure it is open and named data_input.xls, also make sure row 1 cell 1 is not empty}}
+
+#need to choose starting locations
+start = [input-line "Which row to start from?"]
+end = [input-line "Which line to end on?"]
+# initiating list of broken rows
+broked = [list {}]
+
+# for loop and screen check
+for {i = $start} {$i <= $end} {incr i} {
+# checking right screen
+	if {[string trim [screen 2 1 2 32]] != "Clinical Chemistry request entry"} {message "Please make sure you are at the right entry screen, 
+	menu 1 then 1, from the front page, get onto the right screen before closing this box"}
+	# sending PID, need to convert to string and trim any spaces or won't go in
+	send [string trim [dde request $conv "R$i\C1"]]
+	send <enter>
+	wait 1 seconds
+	# Check for recognition of PID
+	if {[string trim [screen 3 40 3 46]] == "Confirm"} {
+		# Sending first 2 letters of surname
+		send [string range [dde request $conv "R$i\C3"] 0 1]
+		send <enter>
+		wait 1 seconds
+		# Check if accepted
+		if {[string trim [screen 24 1 24 8]] != ""} {
+			broked = [linsert $broked 0 row $i Surname entry fail]
+			send <escape>
+			send <^>
+			send <enter>
+			wait 1 seconds
+			continue
+			}
+	# Actions for non recognised PID		
+	} else {
+		# Sending NHS number
+		send [string trim [dde request $conv "R$i\C2"]]
+		send <enter>
+		wait 1 seconds
+		# check entry
+		if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i NHS number entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+		# sending surname
+		send [string trim [dde request $conv "R$i\C3"]]
+		send <enter>
+		# sending forename
+		send [string trim [dde request $conv "R$i\C4"]]
+		send <enter>
+		# sending dob
+		send [string trim [dde request $conv "R$i\C5"]]
+		send <enter>
+		# check date entered right
+		wait 1 seconds
+		if {[string trim [screen 24 1 24 8]] != ""} {
+			broked = [linsert $broked 0 row $i DoB fail]
+			send <escape>
+			send <^>
+			send <enter>
+			wait 1 seconds
+			continue
+			}
+		# sending sex
+		send [string trim [dde request $conv "R$i\C6"]]
+		send <enter>
+		# check sex entered right not possible as screen change :(
+		# at this stage telepath will search patients
+		wait 1 seconds
+		# checking if patient found
+		a = 0
+		while {$a == 0} {
+		# checking middle of screen for patients
+		if {[string trim [screen 7 1 7 8]] != ""} {
+		# get user input
+		input = [input-line "which entry would you like?"]
+		send $input
+		send <enter>
+		send [string range [dde request $conv "R$i\C3"] 0 1]
+		send <enter>
+		break
+		} else {
+		# checking if no match found, else wait and reloop
+		if {[string trim [screen 24 1 24 8]] == "No match"} {
+			# selecting to enter patient
+			send <escape>
+			send a
+			send <enter>}
+			break
+		} else {wait 3 seconds}
+		}
+	}
+	# All paths join here
+	# needs to catch up here
+	wait 1 seconds
+	# Entering consultant code
+	send [string trim [dde request $conv "R$i\C7"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i location entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# Entering Location Code
+	send [string trim [dde request $conv "R$i\C8"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i consultant entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# Entering nhs or private
+	send [string trim [dde request $conv "R$i\C9"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i type N/P entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# go to next screen
+	send s
+	send <enter>
+	wait 1 seconds
+	# enter specimen number
+	send [string trim [dde request $conv "R$i\C10"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i spec num entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		} elseif {[string trim [screen 7 25 7 33]] != "........"} {
+		broked = [linsert $broked 0 row $i specimen already here?]
+		send r
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter date collected Date must be stored in excel as dd/mm/yy format cells by right clicking
+	send [string trim [dde request $conv "R$i\C11"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i date fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter time collected
+	send [string trim [dde request $conv "R$i\C12"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i time entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter date received
+	send [string trim [dde request $conv "R$i\C13"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i date entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter time received
+	send [string trim [dde request $conv "R$i\C14"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i time entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter analytical category
+	send [string trim [dde request $conv "R$i\C15"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i analytical cateory entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter specimen type
+	send [string trim [dde request $conv "R$i\C16"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i specimen type entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter specimen comment
+	if {[string range [dde request $conv "R$i\C17"] 0 0] == "/"} {
+	send </>
+	send <enter>
+	send [string range [dde request $conv "R$i\C17"] 1 100]
+	} else {
+	send [string trim [dde request $conv "R$i\C17"]]	
+	send <enter>
+	}	
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i specimen comment entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter report comment
+	send [string trim [dde request $conv "R$i\C18"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i report comment entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter clinical details
+	send [string trim [dde request $conv "R$i\C19"]]
+	send <enter>
+	# check entry
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 8]] != ""} {
+		broked = [linsert $broked 0 row $i clinical details entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+	# enter sets
+	sets = [split [dde request $conv "R$i\C20"] ","]
+	for {j = 0} {$j < [llength $sets]} {incr j} {
+		send [string trim [lindex $sets $j]]
+		send <enter>
+	# check accepted
+#	wait 1 seconds
+#		if {[string trim [screen 24 1 24 8]] != ""} {
+#		broked = [linsert $broked 0 row $i set code num $j entry fail]
+#		send <escape>
+#		send <^>
+#		send <enter>
+#		continue
+#		}
+	}
+	wait 1 seconds
+	send <enter>
+	# enter customer ref number
+	send [string trim [dde request $conv "R$i\C21"]]
+	send <enter>
+	# enter copy to
+	send [string trim [dde request $conv "R$i\C22"]]
+	send <enter>
+	# check date and time correct and copy to entered right
+	wait 1 seconds
+	if {[string trim [screen 24 1 24 6]] == "Please"} {
+		send <escape>
+		} elseif {[string trim [screen 24 1 24 6]] != ""} {
+		broked = [linsert $broked 0 row $i copy to entry fail]
+		send <escape>
+		send <^>
+		send <enter>
+		wait 1 seconds
+		continue
+		}
+
+	wait 1 seconds
+	# visual check 
+	# rejecting here NEED TO CHANGE TO ACCEPT FOR FINAL
+	wait 1 seconds
+	# change to R for reject and a for save
+	send a
+	wait 1 seconds
+	send <enter>
+	wait 1 seconds
+	if {[string trim [screen 2 1 2 32]] != "Clinical Chemistry request entry"} {
+	broked = [linsert $broked 0 row $i needed results entry]
+	send n
+	send <^>
+	send <enter>
+	send <^>
+	send <enter>
+	wait 1 seconds
+	continue
+	}
+}
+ t = [dde poke $conv R2C23 $broked]
+message finished
